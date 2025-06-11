@@ -605,10 +605,12 @@ public class TaskExecutionService implements DynamicMetricsProvider {
                 });
         if (!localMap.isEmpty()) {
             boolean lockedIMap = false;
+            long lockTs = 0;
             try {
                 lockedIMap =
                         metricsImap.tryLock(
                                 Constant.IMAP_RUNNING_JOB_METRICS_KEY, 5, TimeUnit.SECONDS);
+                lockTs = System.currentTimeMillis();
                 if (!lockedIMap) {
                     logger.warning("try lock failed in update metrics");
                     return;
@@ -627,7 +629,11 @@ public class TaskExecutionService implements DynamicMetricsProvider {
                     boolean unLockedIMap = false;
                     while (!unLockedIMap) {
                         try {
-                            metricsImap.unlock(Constant.IMAP_RUNNING_JOB_METRICS_KEY);
+                            if (System.currentTimeMillis() - lockTs > 5000) {
+                                logger.severe("unlock imap: " + Constant.IMAP_RUNNING_JOB_METRICS_KEY + " exceeds 5s, exit while loop.");
+                            } else {
+                                metricsImap.unlock(Constant.IMAP_RUNNING_JOB_METRICS_KEY);
+                            }
                             unLockedIMap = true;
                         } catch (OperationTimeoutException e) {
                             logger.warning("unlock imap failed in update metrics", e);
